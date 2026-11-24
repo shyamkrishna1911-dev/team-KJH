@@ -1,0 +1,423 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>KJH Supply Risk Predictor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: summary strip, then supplier ranking beside a what-if detail panel, then stress test and model panels */
+:root{
+  --bg:#F2F5F7; --surface:#FFFFFF; --ink:#14222B; --muted:#586A75; --line:#D3DDE3;
+  --accent:#0B6E8A; --accent-ink:#FFFFFF; --soft:#E7EEF2;
+  --good:#1F7A4D; --warn:#A8650A; --bad:#C2410C; --crit:#9F1239;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D151A; --surface:#141F26; --ink:#E5EDF1; --muted:#93A4AF; --line:#26373F;
+    --accent:#4DB4D2; --accent-ink:#06222B; --soft:#1B2A32;
+    --good:#4CC38A; --warn:#E3B04B; --bad:#F28E63; --crit:#F4748F; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D151A; --surface:#141F26; --ink:#E5EDF1; --muted:#93A4AF; --line:#26373F;
+  --accent:#4DB4D2; --accent-ink:#06222B; --soft:#1B2A32;
+  --good:#4CC38A; --warn:#E3B04B; --bad:#F28E63; --crit:#F4748F; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:.01em;margin:0;text-wrap:balance}
+h1{font-size:clamp(2rem,5vw,3rem);line-height:1.05}
+h2{font-size:1.5rem;line-height:1.1}
+h3{font-size:1.1rem}
+.mono,output,td.num,.stat b{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+header.top{border-bottom:1px solid var(--line);background:var(--surface)}
+header.top .wrap{padding-block:22px 18px;display:flex;flex-wrap:wrap;gap:12px 32px;align-items:flex-end;justify-content:space-between}
+header.top p{margin:6px 0 0;color:var(--muted);max-width:60ch}
+.asof{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0;margin-block:20px;border-block:1px solid var(--line)}
+.stat{padding:14px 16px 14px 0;min-width:0}
+.stat + .stat{padding-left:16px;border-left:1px solid var(--line)}
+.stat b{display:block;font-size:1.9rem;font-weight:500;line-height:1.1}
+.stat span{font-size:.82rem;color:var(--muted)}
+@media (max-width:560px){.stat + .stat{border-left:0;padding-left:0}.stat{border-top:1px solid var(--line)}.stat:first-child{border-top:0}}
+.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:20px;align-items:start}
+.grid2{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px;align-items:start;margin-top:20px}
+@media (max-width:900px){.grid,.grid2{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:18px;min-width:0}
+.panel > header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 12px;margin-bottom:12px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr.row{cursor:pointer}
+tr.row:hover td{background:var(--soft)}
+tr.row.sel td{background:var(--soft)}
+tr.row.sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+td.num{text-align:right;white-space:nowrap}
+.namebtn{all:unset;cursor:pointer;font-weight:600;display:block}
+.namebtn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cat{font-size:.78rem;color:var(--muted)}
+.bar{display:flex;align-items:center;gap:8px;min-width:120px}
+.bar i{display:block;height:8px;border-radius:2px;background:var(--accent)}
+.bar .tr{flex:1;height:8px;background:var(--soft);border-radius:2px;overflow:hidden}
+.chip{display:inline-block;font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:3px;white-space:nowrap}
+.t-low{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}
+.t-elev{color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent)}
+.t-high{color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
+.t-crit{color:var(--crit);background:color-mix(in srgb,var(--crit) 16%,transparent)}
+.bigp{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:4px}
+.bigp b{font-family:var(--mono);font-weight:500;font-size:2.6rem;line-height:1}
+.hz{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:.85rem;color:var(--muted);margin-bottom:14px}
+.hz b{color:var(--ink);font-family:var(--mono);font-weight:500}
+#controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px;margin-bottom:16px}
+@media (max-width:560px){#controls{grid-template-columns:minmax(0,1fr)}}
+.ctl{display:grid;grid-template-columns:1fr auto;column-gap:8px;font-size:.84rem}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent);margin:4px 0 0}
+.ctl output{color:var(--muted);font-size:.8rem}
+.chk{display:flex;align-items:center;gap:8px;font-size:.84rem;min-height:36px}
+.chk input{accent-color:var(--accent);width:16px;height:16px}
+.drv{display:grid;grid-template-columns:minmax(96px,34%) 1fr;gap:4px 10px;align-items:center;font-size:.82rem;margin:0 0 14px;padding:0;list-style:none}
+.drv li{display:contents}
+.drv .trk{position:relative;height:10px;background:var(--soft);border-radius:2px}
+.drv .trk::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--muted);opacity:.5}
+.drv .trk i{position:absolute;top:0;bottom:0;border-radius:1px}
+.pos i{left:50%;background:var(--bad)}
+.neg i{right:50%;background:var(--good)}
+.actions{margin:0;padding-left:18px;font-size:.88rem}
+.actions li{margin-bottom:4px}
+.small{font-size:.8rem;color:var(--muted)}
+.row2{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:12px}
+.row2 label{font-size:.84rem;display:flex;flex-direction:column;gap:2px;flex:1 1 200px;min-width:0}
+.row2 input[type=range]{accent-color:var(--accent);width:100%}
+button.btn,.fbtn{font:inherit;font-size:.84rem;font-weight:600;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);padding:6px 12px;border-radius:4px;cursor:pointer}
+button.ghost{background:transparent;color:var(--accent)}
+input[type=text]{font:inherit;font-size:.88rem;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0;flex:1 1 130px}
+.addform{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
+svg .gl{stroke:var(--line);stroke-width:1}
+svg .l1{fill:none;stroke:var(--muted);stroke-width:2}
+svg .l2{fill:none;stroke:var(--bad);stroke-width:2.5}
+svg{display:block;width:100%;height:auto;max-width:100%}
+.legend{display:flex;gap:16px;font-size:.8rem;color:var(--muted);margin-top:6px;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:14px;height:3px;margin-right:6px;vertical-align:middle;background:var(--muted)}
+.legend .s2::before{background:var(--bad)}
+.mstats{display:flex;flex-wrap:wrap;gap:6px 22px;margin-bottom:12px;font-size:.84rem;color:var(--muted)}
+.mstats b{color:var(--ink);font-family:var(--mono);font-weight:500}
+.wts{display:grid;grid-template-columns:minmax(96px,34%) 1fr auto;gap:5px 10px;align-items:center;font-size:.8rem;margin-bottom:14px}
+.wts .tr{height:8px;background:var(--soft);border-radius:2px;overflow:hidden}
+.wts i{display:block;height:100%;background:var(--accent)}
+pre{background:var(--soft);padding:8px 10px;border-radius:4px;font-family:var(--mono);font-size:.74rem;overflow-x:auto;margin:6px 0 10px}
+#msg{font-size:.82rem;min-height:1.2em;margin:6px 0 0}
+footer{padding-block:28px 40px;color:var(--muted);font-size:.8rem;max-width:80ch}
+</style>
+
+<header class="top"><div class="wrap">
+  <div>
+    <div class="eyebrow">Supplier disruption forecast</div>
+    <h1>KJH Company supply risk</h1>
+    <p>Scores each supplier for the chance of a disruption in the next 30, 60 and 90 days, shows what is driving it, and stress-tests the network against port and geopolitical shocks.</p>
+  </div>
+  <div class="asof" id="asof"></div>
+</div></header>
+
+<main class="wrap">
+  <div class="stats" id="stats"></div>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="h-rank">
+      <header><h2 id="h-rank">Suppliers ranked by 30-day risk</h2><span class="small">Select a row to explore it</span></header>
+      <div class="scroll"><table>
+        <thead><tr><th>Supplier</th><th>30-day risk</th><th class="num">90-day</th><th>Tier</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <form class="addform" id="addform">
+        <input type="text" id="new-name" placeholder="New supplier name" aria-label="New supplier name" required>
+        <input type="text" id="new-cat" placeholder="Category" aria-label="Category">
+        <button class="btn" type="submit">Add supplier</button>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="h-det">
+      <header><h2 id="h-det">Supplier detail</h2><button class="btn ghost" id="rm" type="button">Remove</button></header>
+      <div class="eyebrow" id="d-name"></div>
+      <div class="bigp"><b id="d-p"></b><span class="chip" id="d-tier"></span></div>
+      <div class="hz"><span>30 days <b id="d-30"></b></span><span>60 days <b id="d-60"></b></span><span>90 days <b id="d-90"></b></span></div>
+      <h3>What-if inputs</h3>
+      <div id="controls" style="margin-top:8px"></div>
+      <h3>What is driving the score</h3>
+      <p class="small" style="margin:2px 0 8px">Red pushes risk up from the network average, green pulls it down.</p>
+      <ul class="drv" id="drv"></ul>
+      <h3>Suggested actions</h3>
+      <ol class="actions" id="acts"></ol>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <section class="panel" aria-labelledby="h-st">
+      <header><h2 id="h-st">Stress test, next 12 weeks</h2><span class="small">Expected supplier disruptions, cumulative</span></header>
+      <div class="row2">
+        <label for="s-port"><span>Port congestion shock <output id="o-port">+0</output></span><input type="range" id="s-port" min="0" max="40" step="1" value="0"></label>
+        <label for="s-geo"><span>Geopolitical shock <output id="o-geo">+0</output></span><input type="range" id="s-geo" min="0" max="40" step="1" value="0"></label>
+      </div>
+      <div id="chart"></div>
+      <div class="legend"><span>Baseline</span><span class="s2">With shock</span></div>
+      <p class="small" id="st-note" style="margin-bottom:0"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-mod">
+      <header><h2 id="h-mod">The model</h2><span class="small">Logistic regression, trained in this page</span></header>
+      <div class="mstats" id="mstats"></div>
+      <h3>Learned weight of each factor</h3>
+      <div class="wts" id="wts" style="margin-top:8px"></div>
+      <h3>Train on KJH history</h3>
+      <p class="small" style="margin:2px 0 4px">The page starts with a generated sample history so you can see it work. To use real data, load a CSV with one row per supplier-month and this header, where disrupted is 1 if a disruption followed within 30 days.</p>
+      <pre>lead_time_days,on_time_pct,defect_pct,financial_health,geo_risk,single_source,inventory_cover_days,port_congestion,demand_volatility,disrupted</pre>
+      <div class="row2" style="margin-bottom:0">
+        <input type="file" id="csv" accept=".csv,text/csv" aria-label="Load history CSV">
+        <button class="btn ghost" id="reset" type="button">Use sample history</button>
+      </div>
+      <p id="msg" role="status"></p>
+    </section>
+  </div>
+
+  <footer>Supplier names and figures shown here are invented sample data. Probabilities for 60 and 90 days assume the 30-day hazard stays constant. A model trained on the generated sample reflects the patterns used to generate it, so treat results as real only after training on KJH history.</footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const sig=z=>1/(1+Math.exp(-z));
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $=s=>document.querySelector(s);
+const pct=x=>(x*100).toFixed(0)+"%";
+
+const F=[
+ {k:"lead",label:"Lead time",unit:" d",min:5,max:90,step:1,norm:x=>x/90,csv:"lead_time_days",act:"Qualify a nearer or second source to shorten lead time."},
+ {k:"ontime",label:"On-time delivery",unit:"%",min:60,max:100,step:0.5,norm:x=>clamp((100-x)/40,0,1),csv:"on_time_pct",act:"Open a delivery recovery plan and add delay penalties to the contract."},
+ {k:"defect",label:"Defect rate",unit:"%",min:0,max:10,step:0.1,norm:x=>x/10,csv:"defect_pct",act:"Schedule a quality audit and tighten incoming inspection."},
+ {k:"fin",label:"Financial health",unit:"/100",min:0,max:100,step:1,norm:x=>(100-x)/100,csv:"financial_health",act:"Review credit exposure, request current accounts and limit prepayments."},
+ {k:"geo",label:"Geopolitical risk",unit:"/100",min:0,max:100,step:1,norm:x=>x/100,csv:"geo_risk",act:"Map sub-tier sites and line up a supplier in another region."},
+ {k:"single",label:"Single source for key parts",bool:true,norm:x=>x?1:0,csv:"single_source",act:"Qualify a second source for the parts only this supplier provides."},
+ {k:"inv",label:"Inventory cover",unit:" d",min:0,max:60,step:1,norm:x=>1-Math.min(x,60)/60,csv:"inventory_cover_days",act:"Raise safety stock toward 30 days of cover for critical items."},
+ {k:"port",label:"Port congestion",unit:"/100",min:0,max:100,step:1,norm:x=>x/100,csv:"port_congestion",act:"Reroute through a less congested port or air-freight critical lines."},
+ {k:"vol",label:"Demand volatility",unit:"/100",min:0,max:100,step:1,norm:x=>x/100,csv:"demand_volatility",act:"Share rolling forecasts and agree flexible volume bands."}
+];
+const D=F.length;
+const vec=(v,sh)=>F.map(f=>{let x=v[f.k];if(sh){if(f.k==="port")x=Math.min(100,x+sh.port);if(f.k==="geo")x=Math.min(100,x+sh.geo)}return f.norm(x)});
+
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+function synth(n,seed){
+  const r=mulberry(seed),tw=[1.7,3.6,2.0,3.1,2.8,1.5,2.5,2.1,1.4],tb=-8.6,rows=[];
+  for(let i=0;i<n;i++){
+    const v={lead:7+r()*73,ontime:100-Math.min(30,-Math.log(1-r())*6),defect:Math.min(9,-Math.log(1-r())*1.8),fin:35+r()*60,geo:r()*95,single:r()<0.3?1:0,inv:3+r()*50,port:r()*90,vol:r()*90};
+    const x=vec(v);let z=tb;x.forEach((xi,j)=>z+=tw[j]*xi);
+    rows.push({x,y:r()<sig(z)?1:0});
+  }
+  return rows;
+}
+
+function auc(items){
+  const s=items.slice().sort((a,b)=>a.p-b.p);let sumPos=0,pos=0,neg=0,i=0;
+  while(i<s.length){let j=i;while(j<s.length&&s[j].p===s[i].p)j++;const avg=(i+j+1)/2;
+    for(let k=i;k<j;k++){if(s[k].y){sumPos+=avg;pos++}else neg++}i=j}
+  return pos&&neg?(sumPos-pos*(pos+1)/2)/(pos*neg):NaN;
+}
+
+function train(rows){
+  const r=mulberry(7),a=rows.slice();
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
+  const cut=Math.floor(a.length*0.8),tr=a.slice(0,cut),te=a.slice(cut);
+  const w=new Array(D).fill(0);let b=0;
+  for(let e=0;e<1500;e++){
+    const gw=new Array(D).fill(0);let gb=0;
+    for(const s of tr){let z=b;for(let j=0;j<D;j++)z+=w[j]*s.x[j];const err=sig(z)-s.y;for(let j=0;j<D;j++)gw[j]+=err*s.x[j];gb+=err}
+    for(let j=0;j<D;j++)w[j]-=2*(gw[j]/tr.length+0.001*w[j]);
+    b-=2*gb/tr.length;
+  }
+  const mean=new Array(D).fill(0);tr.forEach(s=>s.x.forEach((v,j)=>mean[j]+=v/tr.length));
+  const sc=te.map(s=>{let z=b;for(let j=0;j<D;j++)z+=w[j]*s.x[j];return{p:sig(z),y:s.y}});
+  const acc=sc.filter(t=>(t.p>=0.5?1:0)===t.y).length/sc.length;
+  const base=rows.reduce((q,s)=>q+s.y,0)/rows.length;
+  return{w,b,mean,acc,auc:auc(sc),base,n:rows.length,nte:te.length};
+}
+
+let model=train(synth(800,42));
+let sourceLabel="Generated sample history";
+
+let uid=0;
+const mk=(name,cat,v)=>({id:++uid,name,cat,v});
+let S=[
+ mk("Apex Polymers","Resin",{lead:45,ontime:86,defect:3.1,fin:58,geo:62,single:1,inv:14,port:71,vol:55}),
+ mk("Harbor Steelworks","Steel",{lead:30,ontime:94,defect:1.2,fin:82,geo:25,single:0,inv:35,port:40,vol:30}),
+ mk("Meridian Circuits","Electronics",{lead:70,ontime:78,defect:2.4,fin:61,geo:78,single:1,inv:9,port:68,vol:72}),
+ mk("Northline Packaging","Packaging",{lead:14,ontime:97,defect:0.8,fin:88,geo:12,single:0,inv:42,port:22,vol:25}),
+ mk("Sunridge Textiles","Textiles",{lead:55,ontime:88,defect:4.8,fin:49,geo:45,single:0,inv:20,port:58,vol:48}),
+ mk("Calder Fasteners","Hardware",{lead:21,ontime:92,defect:1.9,fin:74,geo:30,single:0,inv:28,port:35,vol:35}),
+ mk("Vantage Lithium","Batteries",{lead:80,ontime:74,defect:3.6,fin:52,geo:85,single:1,inv:7,port:76,vol:64}),
+ mk("Oakfield Logistics","Freight",{lead:9,ontime:90,defect:0.5,fin:79,geo:20,single:0,inv:50,port:63,vol:40})
+];
+let sel=S[0].id;
+const shock={port:0,geo:0};
+const cur=()=>S.find(s=>s.id===sel)||S[0];
+
+function predict(v,sh){const x=vec(v,sh);let z=model.b;for(let j=0;j<D;j++)z+=model.w[j]*x[j];return sig(z)}
+const horizon=(p,m)=>1-Math.pow(1-p,m);
+function tier(p){return p<0.25?["Low","t-low"]:p<0.5?["Elevated","t-elev"]:p<0.7?["High","t-high"]:["Critical","t-crit"]}
+function contribs(v){const x=vec(v);return F.map((f,j)=>({f,c:model.w[j]*(x[j]-model.mean[j])}))}
+const fmtVal=(f,x)=>f.bool?(x?"Yes":"No"):(+x).toFixed(f.step<1?1:0)+f.unit;
+
+function renderStats(){
+  const ps=S.map(s=>predict(s.v));
+  const exp=ps.reduce((a,b)=>a+b,0);
+  const hi=ps.filter(p=>p>=0.5).length;
+  const top=S.map((s,i)=>({s,p:ps[i]})).sort((a,b)=>b.p-a.p)[0];
+  $("#stats").innerHTML=
+    `<div class="stat"><b>${S.length}</b><span>suppliers monitored</span></div>`+
+    `<div class="stat"><b>${exp.toFixed(1)}</b><span>expected disruptions, next 30 days</span></div>`+
+    `<div class="stat"><b>${hi}</b><span>at high or critical risk</span></div>`+
+    `<div class="stat"><b style="font-size:1.25rem;line-height:2.4rem;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(top.s.name)}</b><span>highest risk, ${pct(top.p)} in 30 days</span></div>`;
+}
+
+function renderRows(){
+  const list=S.map(s=>({s,p:predict(s.v)})).sort((a,b)=>b.p-a.p);
+  $("#rows").innerHTML=list.map(({s,p})=>{
+    const t=tier(p);
+    return `<tr class="row ${s.id===sel?"sel":""}" data-id="${s.id}"><td><button class="namebtn" type="button" data-id="${s.id}">${esc(s.name)}</button><span class="cat">${esc(s.cat||"Uncategorized")}</span></td>`+
+    `<td><div class="bar"><div class="tr"><i style="width:${(p*100).toFixed(1)}%"></i></div><span class="mono">${pct(p)}</span></div></td>`+
+    `<td class="num">${pct(horizon(p,3))}</td><td><span class="chip ${t[1]}">${t[0]}</span></td></tr>`;
+  }).join("");
+}
+
+function buildControls(){
+  const s=cur();
+  $("#d-name").textContent=s.name+" · "+(s.cat||"Uncategorized");
+  $("#controls").innerHTML=F.map(f=>f.bool
+    ?`<label class="chk" for="in-${f.k}"><input type="checkbox" id="in-${f.k}" data-k="${f.k}" ${s.v[f.k]?"checked":""}><span>${f.label}</span></label>`
+    :`<div class="ctl"><label for="in-${f.k}">${f.label}</label><output id="out-${f.k}">${fmtVal(f,s.v[f.k])}</output><input type="range" id="in-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${s.v[f.k]}"></div>`
+  ).join("");
+  $("#rm").hidden=S.length<2;
+  renderDetail();
+}
+
+function renderDetail(){
+  const s=cur(),p=predict(s.v),t=tier(p);
+  $("#d-p").textContent=pct(p);
+  const chip=$("#d-tier");chip.textContent=t[0];chip.className="chip "+t[1];
+  $("#d-30").textContent=pct(p);$("#d-60").textContent=pct(horizon(p,2));$("#d-90").textContent=pct(horizon(p,3));
+  const cs=contribs(s.v).sort((a,b)=>b.c-a.c);
+  const mx=Math.max(0.01,...cs.map(o=>Math.abs(o.c)));
+  $("#drv").innerHTML=cs.map(o=>{
+    const w=(Math.abs(o.c)/mx*50).toFixed(1);
+    return `<li><span>${o.f.label}</span><span class="trk ${o.c>=0?"pos":"neg"}"><i style="width:${w}%"></i></span></li>`;
+  }).join("");
+  const top=cs.filter(o=>o.c>0.15).slice(0,3);
+  $("#acts").innerHTML=top.length
+    ?top.map(o=>`<li>${o.f.act}</li>`).join("")
+    :"<li>No factor is far above the network average. Keep monitoring.</li>";
+}
+
+function renderStress(){
+  $("#o-port").textContent="+"+shock.port;$("#o-geo").textContent="+"+shock.geo;
+  const ps=S.map(s=>predict(s.v)),qs=S.map(s=>predict(s.v,shock));
+  const W=12,rate=4.345;
+  const series=ps_=>Array.from({length:W+1},(_,t)=>ps_.reduce((a,p)=>a+1-Math.pow(1-p,t/rate),0));
+  const A=series(ps),B=series(qs);
+  const ymax=Math.max(1,Math.ceil(Math.max(...B)*1.1*2)/2);
+  const L=40,R=64,T=12,Bt=26,w=640,h=250,pw=w-L-R,ph=h-T-Bt;
+  const X=t=>L+t/W*pw,Y=v=>T+ph-v/ymax*ph;
+  const path=a=>a.map((v,t)=>(t?"L":"M")+X(t).toFixed(1)+" "+Y(v).toFixed(1)).join(" ");
+  let g="";
+  for(let i=0;i<=4;i++){const v=ymax*i/4;g+=`<line class="gl" x1="${L}" x2="${w-R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${v.toFixed(1)}</text>`}
+  for(let t=0;t<=W;t+=2)g+=`<text x="${X(t)}" y="${h-8}" text-anchor="middle">W${t}</text>`;
+  const svg=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Cumulative expected supplier disruptions over 12 weeks, baseline versus shock">${g}`+
+   `<path class="l1" d="${path(A)}"/><path class="l2" d="${path(B)}"/>`+
+   `<circle cx="${X(W)}" cy="${Y(A[W])}" r="3.5" fill="var(--muted)"/><circle cx="${X(W)}" cy="${Y(B[W])}" r="3.5" fill="var(--bad)"/>`+
+   `<text x="${X(W)+8}" y="${Y(A[W])+(B[W]-A[W]<0.35?14:4)}">${A[W].toFixed(1)}</text><text x="${X(W)+8}" y="${Y(B[W])+4}" style="fill:var(--bad)">${B[W].toFixed(1)}</text></svg>`;
+  $("#chart").innerHTML=svg;
+  const crossing=S.filter((s,i)=>qs[i]>=0.5&&ps[i]<0.5).length;
+  $("#st-note").textContent=(shock.port||shock.geo)
+    ?`The shock adds ${(B[W]-A[W]).toFixed(1)} expected disruptions by week 12 and moves ${crossing} supplier${crossing===1?"":"s"} into the high tier.`
+    :"Move the sliders to add points to every supplier's port congestion or geopolitical score.";
+}
+
+function renderModel(){
+  $("#mstats").innerHTML=
+   `<span>Data <b>${esc(sourceLabel)}</b></span><span>Rows <b>${model.n}</b></span>`+
+   `<span>Disruption rate <b>${pct(model.base)}</b></span>`+
+   `<span>Holdout accuracy <b>${isNaN(model.acc)?"n/a":pct(model.acc)}</b></span>`+
+   `<span>AUC <b>${isNaN(model.auc)?"n/a":model.auc.toFixed(2)}</b></span>`;
+  const o=F.map((f,j)=>({f,w:model.w[j]})).sort((a,b)=>b.w-a.w);
+  const mx=Math.max(0.01,...o.map(q=>Math.abs(q.w)));
+  $("#wts").innerHTML=o.map(q=>`<span>${q.f.label}</span><span class="tr"><i style="width:${(Math.max(0,q.w)/mx*100).toFixed(1)}%"></i></span><span class="mono">${q.w.toFixed(2)}</span>`).join("");
+}
+
+function renderAll(){renderStats();renderRows();renderStress();renderModel()}
+
+$("#rows").addEventListener("click",e=>{
+  const tr=e.target.closest("tr.row");if(!tr)return;
+  sel=+tr.dataset.id;renderRows();buildControls();
+});
+$("#controls").addEventListener("input",e=>{
+  const k=e.target.dataset.k;if(!k)return;
+  const f=F.find(q=>q.k===k),s=cur();
+  s.v[k]=f.bool?(e.target.checked?1:0):parseFloat(e.target.value);
+  if(!f.bool)$("#out-"+k).textContent=fmtVal(f,s.v[k]);
+  renderDetail();renderStats();renderRows();renderStress();
+});
+$("#s-port").addEventListener("input",e=>{shock.port=+e.target.value;renderStress()});
+$("#s-geo").addEventListener("input",e=>{shock.geo=+e.target.value;renderStress()});
+$("#addform").addEventListener("submit",e=>{
+  e.preventDefault();
+  const name=$("#new-name").value.trim();if(!name)return;
+  const s=mk(name,$("#new-cat").value.trim(),{lead:40,ontime:90,defect:2,fin:65,geo:40,single:0,inv:25,port:45,vol:45});
+  S.push(s);sel=s.id;$("#new-name").value="";$("#new-cat").value="";
+  renderAll();buildControls();
+});
+$("#rm").addEventListener("click",()=>{
+  if(S.length<2)return;
+  S=S.filter(s=>s.id!==sel);sel=S[0].id;renderAll();buildControls();
+});
+$("#reset").addEventListener("click",()=>{
+  model=train(synth(800,42));sourceLabel="Generated sample history";
+  $("#msg").textContent="Back on the generated sample history.";renderAll();renderDetail();
+});
+$("#csv").addEventListener("change",e=>{
+  const file=e.target.files&&e.target.files[0];if(!file)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const msg=$("#msg");
+    try{
+      const lines=String(rd.result).split(/\r?\n/).filter(l=>l.trim());
+      const head=lines.shift().split(",").map(h=>h.trim().toLowerCase());
+      const idx=F.map(f=>head.indexOf(f.csv)),yi=head.indexOf("disrupted");
+      const miss=F.filter((f,i)=>idx[i]<0).map(f=>f.csv);
+      if(yi<0)miss.push("disrupted");
+      if(miss.length){msg.textContent="Missing columns: "+miss.join(", ");return}
+      const rows=[];
+      for(const l of lines){
+        const c=l.split(",");const v={};let ok=true;
+        F.forEach((f,i)=>{const n=parseFloat(c[idx[i]]);if(isNaN(n))ok=false;v[f.k]=f.bool?(n?1:0):n});
+        const y=parseInt(c[yi],10);if(y!==0&&y!==1)ok=false;
+        if(ok)rows.push({x:vec(v),y});
+      }
+      const pos=rows.filter(r=>r.y).length;
+      if(rows.length<50||pos<5||rows.length-pos<5){msg.textContent="Need at least 50 valid rows with 5 or more disrupted and 5 or more undisrupted.";return}
+      model=train(rows);sourceLabel=file.name;
+      msg.textContent="Trained on "+rows.length+" rows from "+file.name+".";
+      renderAll();renderDetail();
+    }catch(err){msg.textContent="Could not read that file as CSV."}
+  };
+  rd.readAsText(file);
+});
+
+$("#asof").textContent="Forecast as of "+new Date().toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
+renderAll();buildControls();
+})();
+</script>
+
+</body></html>
